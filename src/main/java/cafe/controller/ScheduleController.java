@@ -1,6 +1,7 @@
 package cafe.controller;
 
-import cafe.dto.*;
+import cafe.dto.FullScheduleDto;
+import cafe.dto.MyScheduleDto;
 import cafe.model.ScheduleEntry;
 import cafe.service.ScheduleService;
 import org.springframework.beans.factory.annotation.Autowired;
