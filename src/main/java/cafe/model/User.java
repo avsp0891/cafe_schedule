@@ -25,6 +25,15 @@ public class User {
     private String email;
     private String password;
 
+    @Column(name = "first_name")
+    private String firstName;
+
+    @Column(name = "last_name")
+    private String lastName;
+
+    @Column(name = "position")
+    private String position;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "user_roles",
@@ -32,4 +41,9 @@ public class User {
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     private Set<Role> roles = new HashSet<>();
+
+    public String getFullName() {
+        return (firstName != null ? firstName : "") +
+                (lastName != null ? " " + lastName : "");
+    }
 }
