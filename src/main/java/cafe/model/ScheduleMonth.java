@@ -38,6 +38,7 @@ public class ScheduleMonth {
         this.year = yearMonth.getYear();
         this.month = yearMonth.getMonthValue();
     }
+
     public YearMonth getYearMonth() {
         return YearMonth.of(year, month);
     }
