@@ -1,0 +1,26 @@
+version: '3.8'
+services:
+
+  server:
+    build: .
+    image: cafe
+    container_name: main_container
+    ports:
+      - "9090:9090"
+    depends_on:
+      - db
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/cafe_schedule
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=root
+
+  db:
+    hostname: db
+    image: postgres:13.7-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=cafe_schedule
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=root
+
