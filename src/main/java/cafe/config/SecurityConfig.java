@@ -60,7 +60,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth ->
                         auth.requestMatchers("/api/auth/**").permitAll()
-                                .requestMatchers("/api/schedule/**").authenticated() // ← явно указано
+                                .requestMatchers("/api/schedule/**").authenticated()
                                 .requestMatchers("/api/users/**").hasAuthority("USER_ADMIN")
                                 .anyRequest().authenticated()
                 );

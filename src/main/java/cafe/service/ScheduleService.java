@@ -105,11 +105,8 @@ public class ScheduleService {
         }
     }
 
-    // === МЕНЕДЖЕР: получить всё расписание ===
+    // === СОТРУДНИК И МЕНЕДЖЕР: получить всё расписание ===
     public FullScheduleDto getAllSchedule(LocalDate monthDate) {
-        if (!isCafeAdmin()) {
-            throw new RuntimeException("Only cafe admin can view full schedule");
-        }
         YearMonth yearMonth = YearMonth.from(monthDate);
         ScheduleMonth month = getOrCreateScheduleMonth(yearMonth);
         List<ScheduleEntry> allEntries = scheduleEntryRepository.findByScheduleMonthId(month.getId());
