@@ -2,7 +2,6 @@ package cafe.controller;
 
 import cafe.dto.FullScheduleDto;
 import cafe.dto.MyScheduleDto;
-import cafe.model.ScheduleEntry;
 import cafe.service.ScheduleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -10,7 +9,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.List;
 
 @CrossOrigin(origins = "*")
 @RestController
@@ -22,7 +20,7 @@ public class ScheduleController {
 
     // === Сотрудник: получить своё расписание ===
     @GetMapping("/my")
-    public ResponseEntity<List<ScheduleEntry>> getMySchedule(
+    public ResponseEntity<FullScheduleDto> getMySchedule(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month) {
         return ResponseEntity.ok(scheduleService.getMySchedule(month));
     }
@@ -36,7 +34,7 @@ public class ScheduleController {
         return ResponseEntity.ok("Saved");
     }
 
-    // === Менеджер: получить всё расписание ===
+    // === Менеджер и сотрудник: получить всё расписание ===
     @GetMapping("/all")
     public ResponseEntity<FullScheduleDto> getAllSchedule(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month) {
