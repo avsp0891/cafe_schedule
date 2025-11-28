@@ -34,6 +34,7 @@ public class ScheduleController {
         return ResponseEntity.ok("Saved");
     }
 
+    //todo передавать статус
     // === Менеджер и сотрудник: получить всё расписание ===
     @GetMapping("/all")
     public ResponseEntity<FullScheduleDto> getAllSchedule(
@@ -51,6 +52,7 @@ public class ScheduleController {
     }
 
     // === Менеджер: утвердить месяц ===
+    //todo добавить возможность через query params апрувить/отменить апрув
     @PostMapping("/approve")
     public ResponseEntity<?> approveSchedule(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month) {

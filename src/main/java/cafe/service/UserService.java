@@ -133,6 +133,9 @@ public class UserService {
     }
 
     public List<User> getAllUsers() {
+        if (isStaff()){
+            throw new RuntimeException("Only USER_ADMIN and USER_CAFE can get users");
+        }
         return userRepository.findAll();
     }
 
@@ -147,5 +150,11 @@ public class UserService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication.getAuthorities().stream()
                 .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("USER_ADMIN"));
+    }
+
+    private boolean isStaff() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication.getAuthorities().stream()
+                .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("STAFF"));
     }
 }
