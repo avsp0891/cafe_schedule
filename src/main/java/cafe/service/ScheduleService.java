@@ -60,14 +60,37 @@ public class ScheduleService {
     }
 
     // === СОТРУДНИК: получить своё расписание ===
-    public List<ScheduleEntry> getMySchedule(LocalDate monthDate) {
+    public FullScheduleDto getMySchedule(LocalDate monthDate) {
         if (!isStaff() && !isCafeAdmin()) {
             throw new RuntimeException("Access denied");
         }
-        User user = getCurrentUser();
+        User currentUser = getCurrentUser();
         YearMonth yearMonth = YearMonth.from(monthDate);
         ScheduleMonth month = getOrCreateScheduleMonth(yearMonth);
-        return scheduleEntryRepository.findByUserIdAndScheduleMonthId(user.getId(), month.getId());
+
+        List<ScheduleEntry> myEntries = scheduleEntryRepository.findByUserIdAndScheduleMonthId(
+                currentUser.getId(), month.getId()
+        );
+
+        // Формируем FullScheduleDto с одной записью
+        FullScheduleDto.UserSchedule mySchedule = new FullScheduleDto.UserSchedule();
+        mySchedule.setUserId(currentUser.getId());
+        mySchedule.setUsername(currentUser.getUsername());
+        mySchedule.setFirstName(currentUser.getFirstName());
+        mySchedule.setLastName(currentUser.getLastName());
+        mySchedule.setPosition(currentUser.getPosition());
+        mySchedule.setDays(myEntries.stream()
+                .map(entry -> {
+                    MyScheduleDto.ScheduleDay day = new MyScheduleDto.ScheduleDay();
+                    day.setDate(entry.getEntryDate());
+                    day.setStatus(entry.getStatus());
+                    return day;
+                })
+                .collect(Collectors.toList()));
+
+        FullScheduleDto result = new FullScheduleDto();
+        result.setUserSchedules(List.of(mySchedule));
+        return result;
     }
 
     // === СОТРУДНИК: сохранить своё расписание ===
@@ -105,11 +128,8 @@ public class ScheduleService {
         }
     }
 
-    // === МЕНЕДЖЕР: получить всё расписание ===
+    // === СОТРУДНИК И МЕНЕДЖЕР: получить всё расписание ===
     public FullScheduleDto getAllSchedule(LocalDate monthDate) {
-        if (!isCafeAdmin()) {
-            throw new RuntimeException("Only cafe admin can view full schedule");
-        }
         YearMonth yearMonth = YearMonth.from(monthDate);
         ScheduleMonth month = getOrCreateScheduleMonth(yearMonth);
         List<ScheduleEntry> allEntries = scheduleEntryRepository.findByScheduleMonthId(month.getId());
