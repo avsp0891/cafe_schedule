@@ -1,6 +1,8 @@
 package cafe.dto;
 
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 
 import java.util.List;
@@ -9,6 +11,12 @@ import java.util.List;
 @Setter
 public class FullScheduleDto {
     private List<UserSchedule> userSchedules;
+    private boolean approved;
+
+    public FullScheduleDto(List<UserSchedule> userSchedules, boolean approved) {
+        this.userSchedules = userSchedules;
+        this.approved = approved;
+    }
 
     @Getter
     @Setter

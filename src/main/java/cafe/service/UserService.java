@@ -1,6 +1,8 @@
 package cafe.service;
 
 import cafe.dto.UserDto;
+import cafe.exception.InsufficientPermissionsException;
+import cafe.exception.ResourceNotFoundException;
 import cafe.model.Role;
 import cafe.model.User;
 import cafe.repository.RoleRepository;
@@ -76,11 +78,11 @@ public class UserService {
     @Transactional
     public User updateUser(Long id, UserDto dto) {
         if (!isAdmin()) {
-            throw new RuntimeException("Only USER_ADMIN can manage users");
+            throw new InsufficientPermissionsException("Only USER_ADMIN can manage users");
         }
 
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
 
         // Обновляем ТОЛЬКО ненулевые поля
         if (dto.getUsername() != null && !dto.getUsername().isBlank()) {
@@ -125,16 +127,16 @@ public class UserService {
     }
 
     @Transactional
-    public void deleteUser(Long id) {
-        if (!userRepository.existsById(id)) {
-            throw new RuntimeException("User not found");
-        }
+    public User deleteUser(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
         userRepository.deleteById(id);
+        return user;
     }
 
     public List<User> getAllUsers() {
-        if (isStaff()){
-            throw new RuntimeException("Only USER_ADMIN and USER_CAFE can get users");
+        if (isStaff()) {
+            throw new InsufficientPermissionsException("Only USER_ADMIN and USER_CAFE can get users");
         }
         return userRepository.findAll();
     }
@@ -143,7 +145,7 @@ public class UserService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String username = authentication.getName();
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("Current user not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
     }
 
     private boolean isAdmin() {
