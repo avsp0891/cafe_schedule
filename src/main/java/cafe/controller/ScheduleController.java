@@ -25,16 +25,15 @@ public class ScheduleController {
         return ResponseEntity.ok(scheduleService.getMySchedule(month));
     }
 
-    // === Сотрудник: сохранить своё расписание ===
+    // === Сотрудник и менеджер: сохранить своё расписание ===
     @PostMapping("/my")
-    public ResponseEntity<?> saveMySchedule(
+    public ResponseEntity<FullScheduleDto> saveMySchedule(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month,
             @RequestBody MyScheduleDto dto) {
-        scheduleService.saveMySchedule(month, dto);
-        return ResponseEntity.ok("Saved");
+        FullScheduleDto result = scheduleService.saveMySchedule(month, dto);
+        return ResponseEntity.ok(result);
     }
 
-    //todo передавать статус
     // === Менеджер и сотрудник: получить всё расписание ===
     @GetMapping("/all")
     public ResponseEntity<FullScheduleDto> getAllSchedule(
@@ -44,20 +43,19 @@ public class ScheduleController {
 
     // === Менеджер: сохранить всё расписание ===
     @PostMapping("/all")
-    public ResponseEntity<?> saveAllSchedule(
+    public ResponseEntity<FullScheduleDto> saveAllSchedule(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month,
             @RequestBody FullScheduleDto dto) {
-        scheduleService.saveAllSchedule(month, dto);
-        return ResponseEntity.ok("Saved");
+        FullScheduleDto result = scheduleService.saveAllSchedule(month, dto);
+        return ResponseEntity.ok(result);
     }
 
-    // === Менеджер: утвердить месяц ===
-    //todo добавить возможность через query params апрувить/отменить апрув
+    // === Менеджер: утвердить/отменить утверждение месяц ===
     @PostMapping("/approve")
-    public ResponseEntity<?> approveSchedule(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month) {
-        scheduleService.approveSchedule(month);
-        return ResponseEntity.ok("Approved");
+    public ResponseEntity<FullScheduleDto> approveSchedule(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month,
+            @RequestParam(defaultValue = "true") boolean approved) {
+        return ResponseEntity.ok(scheduleService.approveSchedule(month, approved));
     }
 
     // === Статус утверждения (для всех) ===
