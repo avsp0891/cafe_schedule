@@ -30,7 +30,7 @@ public class ProfileController {
                         .toList()
         ));
     }
-    
+
     public record CurrentUserResponse(
             Long id,
             String username,
