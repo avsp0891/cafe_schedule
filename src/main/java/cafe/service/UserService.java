@@ -135,9 +135,6 @@ public class UserService {
     }
 
     public List<User> getAllUsers() {
-        if (isStaff()) {
-            throw new InsufficientPermissionsException("Only USER_ADMIN and USER_CAFE can get users");
-        }
         return userRepository.findAll();
     }
 
