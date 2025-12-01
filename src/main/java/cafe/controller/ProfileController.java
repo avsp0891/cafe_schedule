@@ -21,17 +21,22 @@ public class ProfileController {
                 userDetails.getId(),
                 userDetails.getUsername(),
                 userDetails.getEmail(),
+                userDetails.getFirstName(),
+                userDetails.getLastName(),
+                userDetails.getPosition(),
                 userDetails.getAuthorities().stream()
                         .map(auth -> auth.getAuthority())
                         .toList()
         ));
     }
 
-    // Вложенный класс для ответа
     public record CurrentUserResponse(
             Long id,
             String username,
             String email,
+            String firstName,
+            String lastName,
+            String position,
             java.util.List<String> roles
     ) {
     }
