@@ -3,6 +3,7 @@ package cafe.controller;
 import cafe.security.UserDetailsImpl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,11 +26,11 @@ public class ProfileController {
                 userDetails.getLastName(),
                 userDetails.getPosition(),
                 userDetails.getAuthorities().stream()
-                        .map(auth -> auth.getAuthority())
+                        .map(GrantedAuthority::getAuthority)
                         .toList()
         ));
     }
-
+    
     public record CurrentUserResponse(
             Long id,
             String username,
