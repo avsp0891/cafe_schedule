@@ -108,6 +108,7 @@ public class ScheduleService {
         }
 
         scheduleEntryRepository.deleteByUserIdAndScheduleMonthId(user.getId(), month.getId());
+        scheduleEntryRepository.flush();
 
         for (LocalDate date : allDaysInMonth) {
             ScheduleEntry.Status status = inputMap.getOrDefault(date, ScheduleEntry.Status.OFF);
@@ -158,6 +159,7 @@ public class ScheduleService {
 
         // Удаляем всё расписание на месяц
         scheduleEntryRepository.deleteAllByScheduleMonthId(month.getId());
+        scheduleEntryRepository.flush();
 
         // Обрабатываем каждого пользователя из запроса
         if (dto.getUserSchedules() != null) {
