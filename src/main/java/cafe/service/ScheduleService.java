@@ -4,9 +4,11 @@ import cafe.dto.FullScheduleDto;
 import cafe.dto.MyScheduleDto;
 import cafe.exception.InsufficientPermissionsException;
 import cafe.exception.ResourceNotFoundException;
+import cafe.model.Cafe;
 import cafe.model.ScheduleEntry;
 import cafe.model.ScheduleMonth;
 import cafe.model.User;
+import cafe.repository.CafeRepository;
 import cafe.repository.ScheduleEntryRepository;
 import cafe.repository.ScheduleMonthRepository;
 import cafe.repository.UserRepository;
@@ -19,21 +21,20 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 public class ScheduleService {
-
     @Autowired
     private ScheduleEntryRepository scheduleEntryRepository;
     @Autowired
     private ScheduleMonthRepository scheduleMonthRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private CafeRepository cafeRepository;
 
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -55,189 +56,164 @@ public class ScheduleService {
         return hasRole("STAFF");
     }
 
-    private ScheduleMonth getOrCreateScheduleMonth(YearMonth yearMonth) {
-        return scheduleMonthRepository.findByYearAndMonth(yearMonth.getYear(), yearMonth.getMonthValue())
-                .orElseGet(() -> {
-                    ScheduleMonth month = new ScheduleMonth(yearMonth);
-                    return scheduleMonthRepository.save(month);
-                });
+    private ScheduleMonth getOrCreateScheduleMonth(YearMonth yearMonth, Cafe cafe) {
+        return scheduleMonthRepository.findByYearAndMonthAndCafeId(yearMonth.getYear(), yearMonth.getMonthValue(), cafe.getId())
+                .orElseGet(() -> scheduleMonthRepository.save(new ScheduleMonth(yearMonth, cafe)));
     }
 
-    // === СОТРУДНИК: получить своё расписание ===
-    public FullScheduleDto getMySchedule(LocalDate monthDate) {
-        if (!isStaff() && !isCafeAdmin()) {
-            throw new InsufficientPermissionsException("Access denied: you must be staff or cafe admin");
-        }
-        User currentUser = getCurrentUser();
-        YearMonth yearMonth = YearMonth.from(monthDate);
-        ScheduleMonth month = getOrCreateScheduleMonth(yearMonth);
-
-        List<ScheduleEntry> myEntries = scheduleEntryRepository.findByUserIdAndScheduleMonthId(
-                currentUser.getId(), month.getId()
-        );
-
-        FullScheduleDto.UserSchedule mySchedule = buildUserSchedule(currentUser, myEntries);
-        return new FullScheduleDto(List.of(mySchedule), month.isApproved());
-    }
-
-    // === СОТРУДНИК: сохранить своё расписание ===
     @Transactional
     public FullScheduleDto saveMySchedule(LocalDate monthDate, MyScheduleDto dto) {
         if (!isStaff() && !isCafeAdmin()) {
             throw new InsufficientPermissionsException("Only staff or cafe admin can save personal schedule");
         }
         User user = getCurrentUser();
+        Cafe cafe = cafeRepository.findById(dto.getCafeId())
+                .orElseThrow(() -> new ResourceNotFoundException("Cafe not found"));
+
+        if (!user.getCafes().contains(cafe)) {
+            throw new InsufficientPermissionsException("You are not assigned to this cafe");
+        }
+
         YearMonth yearMonth = YearMonth.from(monthDate);
-        ScheduleMonth month = getOrCreateScheduleMonth(yearMonth);
+        ScheduleMonth month = getOrCreateScheduleMonth(yearMonth, cafe);
 
         if (month.isApproved()) {
             throw new IllegalStateException("Schedule is approved and locked");
         }
 
-
-        List<LocalDate> allDaysInMonth = getAllDaysInMonth(yearMonth);
-
-        Map<LocalDate, ScheduleEntry.Status> inputMap = new HashMap<>();
-        if (dto.getDays() != null) {
-            for (MyScheduleDto.ScheduleDay day : dto.getDays()) {
-                if (!YearMonth.from(day.getDate()).equals(yearMonth)) {
-                    throw new IllegalArgumentException("Date " + day.getDate() + " is not in month " + yearMonth);
-                }
-                inputMap.put(day.getDate(), day.getStatus());
-            }
-        }
-
-        scheduleEntryRepository.deleteByUserIdAndScheduleMonthId(user.getId(), month.getId());
+        // Удаляем старые смены
+        scheduleEntryRepository.deleteByUserIdAndScheduleMonthIdAndCafeId(user.getId(), month.getId(), cafe.getId());
         scheduleEntryRepository.flush();
 
-        for (LocalDate date : allDaysInMonth) {
-            ScheduleEntry.Status status = inputMap.getOrDefault(date, ScheduleEntry.Status.OFF);
+        // Получаем существующие смены для проверки пересечений
+        List<ScheduleEntry> existingEntries = scheduleEntryRepository.findByUserIdAndScheduleMonthIdAndCafeId(user.getId(), month.getId(), cafe.getId());
+
+        for (MyScheduleDto.Shift shift : dto.getShifts()) {
+            if (!YearMonth.from(shift.getDate()).equals(yearMonth)) {
+                throw new IllegalArgumentException("Date " + shift.getDate() + " is not in month " + yearMonth);
+            }
+            if (!shift.getStartTime().isBefore(shift.getEndTime())) {
+                throw new IllegalArgumentException("Start time must be before end time");
+            }
+            // Проверка пересечений
+            boolean hasOverlap = existingEntries.stream()
+                    .anyMatch(e -> e.getDate().equals(shift.getDate()) &&
+                            shift.getStartTime().isBefore(e.getEndTime()) &&
+                            shift.getEndTime().isAfter(e.getStartTime()));
+            if (hasOverlap) {
+                throw new IllegalArgumentException("Shift overlaps with existing entry on " + shift.getDate());
+            }
+
             ScheduleEntry entry = new ScheduleEntry();
             entry.setUser(user);
-            entry.setEntryDate(date);
-            entry.setStatus(status);
+            entry.setCafe(cafe);
+            entry.setDate(shift.getDate());
+            entry.setStartTime(shift.getStartTime());
+            entry.setEndTime(shift.getEndTime());
+            entry.setStatus(shift.getStatus());
             entry.setScheduleMonth(month);
             scheduleEntryRepository.save(entry);
         }
 
-        List<ScheduleEntry> savedEntries = scheduleEntryRepository.findByUserIdAndScheduleMonthId(user.getId(), month.getId());
-        FullScheduleDto.UserSchedule savedSchedule = buildUserSchedule(user, savedEntries);
-        return new FullScheduleDto(List.of(savedSchedule), month.isApproved());
+        return getMySchedule(monthDate, dto.getCafeId());
     }
 
-    // === СОТРУДНИК И МЕНЕДЖЕР: получить всё расписание ===
-    public FullScheduleDto getAllSchedule(LocalDate monthDate) {
-        YearMonth yearMonth = YearMonth.from(monthDate);
-        ScheduleMonth month = getOrCreateScheduleMonth(yearMonth);
-        List<ScheduleEntry> allEntries = scheduleEntryRepository.findByScheduleMonthId(month.getId());
+    public FullScheduleDto getMySchedule(LocalDate monthDate, Long cafeId) {
+        if (!isStaff() && !isCafeAdmin()) {
+            throw new InsufficientPermissionsException("Access denied: you must be staff or cafe admin");
+        }
+        User user = getCurrentUser();
+        Cafe cafe = cafeRepository.findById(cafeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cafe not found"));
 
-        // Группируем по пользователю
+        YearMonth yearMonth = YearMonth.from(monthDate);
+        ScheduleMonth month = getOrCreateScheduleMonth(yearMonth, cafe);
+
+        List<ScheduleEntry> myEntries = scheduleEntryRepository.findByUserIdAndScheduleMonthIdAndCafeId(user.getId(), month.getId(), cafe.getId());
+        return new FullScheduleDto(cafeId, month.isApproved(), List.of(buildUserSchedule(user, myEntries)));
+    }
+
+    public FullScheduleDto getAllSchedule(LocalDate monthDate, Long cafeId) {
+        YearMonth yearMonth = YearMonth.from(monthDate);
+        Cafe cafe = cafeRepository.findById(cafeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cafe not found"));
+        ScheduleMonth month = getOrCreateScheduleMonth(yearMonth, cafe);
+
+        List<ScheduleEntry> allEntries = scheduleEntryRepository.findByScheduleMonthIdAndCafeId(month.getId(), cafe.getId());
         Map<Long, List<ScheduleEntry>> grouped = allEntries.stream()
-                .collect(Collectors.groupingBy(entry -> entry.getUser().getId()));
+                .collect(Collectors.groupingBy(e -> e.getUser().getId()));
 
         List<FullScheduleDto.UserSchedule> userSchedules = grouped.values().stream()
-                .map(entries -> {
-                    User user = entries.get(0).getUser();
-                    return buildUserSchedule(user, entries);
-                })
+                .map(entries -> buildUserSchedule(entries.get(0).getUser(), entries))
                 .collect(Collectors.toList());
 
-        return new FullScheduleDto(userSchedules, month.isApproved());
+        return new FullScheduleDto(cafeId, month.isApproved(), userSchedules);
     }
 
-    // === МЕНЕДЖЕР: сохранить всё расписание ===
     @Transactional
     public FullScheduleDto saveAllSchedule(LocalDate monthDate, FullScheduleDto dto) {
         if (!isCafeAdmin()) {
             throw new InsufficientPermissionsException("Only cafe admin can save full schedule");
         }
         YearMonth yearMonth = YearMonth.from(monthDate);
-        ScheduleMonth month = getOrCreateScheduleMonth(yearMonth);
+        Cafe cafe = cafeRepository.findById(dto.getCafeId())
+                .orElseThrow(() -> new ResourceNotFoundException("Cafe not found"));
+        ScheduleMonth month = getOrCreateScheduleMonth(yearMonth, cafe);
 
-        // Генерируем полный список дней месяца
-        List<LocalDate> allDaysInMonth = getAllDaysInMonth(yearMonth);
+        if (month.isApproved()) {
+            throw new IllegalStateException("Schedule is approved and locked");
+        }
 
-        // Удаляем всё расписание на месяц
-        scheduleEntryRepository.deleteAllByScheduleMonthId(month.getId());
+        scheduleEntryRepository.deleteAllByScheduleMonthIdAndCafeId(month.getId(), cafe.getId());
         scheduleEntryRepository.flush();
 
-        // Обрабатываем каждого пользователя из запроса
-        if (dto.getUserSchedules() != null) {
-            for (FullScheduleDto.UserSchedule userSchedule : dto.getUserSchedules()) {
-                User user = userRepository.findById(userSchedule.getUserId())
-                        .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userSchedule.getUserId()));
+        for (FullScheduleDto.UserSchedule userSchedule : dto.getUserSchedules()) {
+            User user = userRepository.findById(userSchedule.getUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-                Map<LocalDate, ScheduleEntry.Status> inputMap = new HashMap<>();
-                if (userSchedule.getDays() != null) {
-                    for (MyScheduleDto.ScheduleDay day : userSchedule.getDays()) {
-                        if (!YearMonth.from(day.getDate()).equals(yearMonth)) {
-                            throw new IllegalArgumentException("Date " + day.getDate() + " is not in month " + yearMonth);
-                        }
-                        inputMap.put(day.getDate(), day.getStatus());
-                    }
-                }
+            List<ScheduleEntry> existing = scheduleEntryRepository.findByUserIdAndScheduleMonthIdAndCafeId(user.getId(), month.getId(), cafe.getId());
 
-                for (LocalDate date : allDaysInMonth) {
-                    ScheduleEntry.Status status = inputMap.getOrDefault(date, ScheduleEntry.Status.OFF);
-                    ScheduleEntry entry = new ScheduleEntry();
-                    entry.setUser(user);
-                    entry.setEntryDate(date);
-                    entry.setStatus(status);
-                    entry.setScheduleMonth(month);
-                    scheduleEntryRepository.save(entry);
-                }
+            for (MyScheduleDto.Shift shift : userSchedule.getShifts()) {
+                boolean hasOverlap = existing.stream()
+                        .anyMatch(e -> e.getDate().equals(shift.getDate()) &&
+                                shift.getStartTime().isBefore(e.getEndTime()) &&
+                                shift.getEndTime().isAfter(e.getStartTime()));
+                if (hasOverlap) throw new IllegalArgumentException("Overlap detected for user " + user.getId());
+
+                ScheduleEntry entry = new ScheduleEntry();
+                entry.setUser(user);
+                entry.setCafe(cafe);
+                entry.setDate(shift.getDate());
+                entry.setStartTime(shift.getStartTime());
+                entry.setEndTime(shift.getEndTime());
+                entry.setStatus(shift.getStatus());
+                entry.setScheduleMonth(month);
+                scheduleEntryRepository.save(entry);
             }
         }
-
-        return getAllSchedule(monthDate);
+        return getAllSchedule(monthDate, dto.getCafeId());
     }
 
-    // === МЕНЕДЖЕР: утвердить месяц ===
     @Transactional
-    public FullScheduleDto approveSchedule(LocalDate monthDate, boolean approved) {
-        if (!isCafeAdmin()) {
-            throw new InsufficientPermissionsException("Only cafe admin can approve schedule");
-        }
+    public FullScheduleDto approveSchedule(LocalDate monthDate, Long cafeId, boolean approved) {
+        if (!isCafeAdmin()) throw new InsufficientPermissionsException("Only cafe admin can approve");
         YearMonth yearMonth = YearMonth.from(monthDate);
-        ScheduleMonth month = getOrCreateScheduleMonth(yearMonth);
+        Cafe cafe = cafeRepository.findById(cafeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cafe not found"));
+        ScheduleMonth month = getOrCreateScheduleMonth(yearMonth, cafe);
         month.setApproved(approved);
         month.setApprovedBy(getCurrentUser());
         scheduleMonthRepository.save(month);
-        return getAllSchedule(monthDate);
+        return getAllSchedule(monthDate, cafeId);
     }
 
-    @Transactional
-    public FullScheduleDto unapproveSchedule(LocalDate monthDate) {
-        if (!isCafeAdmin()) {
-            throw new InsufficientPermissionsException("Only cafe admin can unapprove schedule");
-        }
+    public boolean isApproved(LocalDate monthDate, Long cafeId) {
         YearMonth yearMonth = YearMonth.from(monthDate);
-        ScheduleMonth month = scheduleMonthRepository.findByYearAndMonth(
-                yearMonth.getYear(), yearMonth.getMonthValue()
-        ).orElseThrow(() -> new ResourceNotFoundException("Schedule month not found"));
-
-        month.setApproved(false);
-        month.setApprovedBy(getCurrentUser()); // опционально: сбросить, кто утверждал
-        scheduleMonthRepository.save(month);
-
-        return getAllSchedule(monthDate);
-    }
-
-    // === Статус месяца (для фронтенда) ===
-    public boolean isApproved(LocalDate monthDate) {
-        YearMonth yearMonth = YearMonth.from(monthDate);
-        ScheduleMonth month = scheduleMonthRepository.findByYearAndMonth(
-                yearMonth.getYear(), yearMonth.getMonthValue()
-        ).orElse(null);
-        return month != null && month.isApproved();
-    }
-
-    private void validateDaysInMonth(List<MyScheduleDto.ScheduleDay> days, YearMonth expectedMonth) {
-        for (var day : days) {
-            if (!YearMonth.from(day.getDate()).equals(expectedMonth)) {
-                throw new IllegalArgumentException("All dates must be in the same month: " + expectedMonth);
-            }
-        }
+        Cafe cafe = cafeRepository.findById(cafeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cafe not found"));
+        return scheduleMonthRepository.findByYearAndMonthAndCafeId(yearMonth.getYear(), yearMonth.getMonthValue(), cafe.getId())
+                .map(ScheduleMonth::isApproved)
+                .orElse(false);
     }
 
     private FullScheduleDto.UserSchedule buildUserSchedule(User user, List<ScheduleEntry> entries) {
@@ -247,26 +223,14 @@ public class ScheduleService {
         us.setFirstName(user.getFirstName());
         us.setLastName(user.getLastName());
         us.setPosition(user.getPosition());
-        us.setDays(entries.stream()
-                .map(e -> {
-                    MyScheduleDto.ScheduleDay d = new MyScheduleDto.ScheduleDay();
-                    d.setDate(e.getEntryDate());
-                    d.setStatus(e.getStatus());
-                    return d;
-                })
-                .collect(Collectors.toList()));
+        us.setShifts(entries.stream().map(e -> {
+            MyScheduleDto.Shift s = new MyScheduleDto.Shift();
+            s.setDate(e.getDate());
+            s.setStartTime(e.getStartTime());
+            s.setEndTime(e.getEndTime());
+            s.setStatus(e.getStatus());
+            return s;
+        }).collect(Collectors.toList()));
         return us;
-    }
-
-    private List<LocalDate> getAllDaysInMonth(YearMonth yearMonth) {
-        LocalDate firstDay = yearMonth.atDay(1);
-        LocalDate lastDay = yearMonth.atEndOfMonth();
-        List<LocalDate> days = new ArrayList<>();
-        LocalDate current = firstDay;
-        while (!current.isAfter(lastDay)) {
-            days.add(current);
-            current = current.plusDays(1);
-        }
-        return days;
     }
 }

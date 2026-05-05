@@ -9,24 +9,20 @@ import lombok.Setter;
 import java.time.YearMonth;
 
 @Entity
+@Table(name = "schedule_months",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"year", "month", "cafe_id"}))
 @Getter
 @Setter
-@AllArgsConstructor
 @NoArgsConstructor
-@Table(name = "schedule_months",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"year", "month"}))
+@AllArgsConstructor
 public class ScheduleMonth {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
     @Column(nullable = false)
     private int year;
-
     @Column(nullable = false)
     private int month;
-
     @Column(nullable = false)
     private boolean approved = false;
 
@@ -34,9 +30,14 @@ public class ScheduleMonth {
     @JoinColumn(name = "approved_by")
     private User approvedBy;
 
-    public ScheduleMonth(YearMonth yearMonth) {
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cafe_id", nullable = false)
+    private Cafe cafe;
+
+    public ScheduleMonth(YearMonth yearMonth, Cafe cafe) {
         this.year = yearMonth.getYear();
         this.month = yearMonth.getMonthValue();
+        this.cafe = cafe;
     }
 
     public YearMonth getYearMonth() {

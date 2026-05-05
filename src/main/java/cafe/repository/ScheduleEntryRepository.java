@@ -9,14 +9,17 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface ScheduleEntryRepository extends JpaRepository<ScheduleEntry, Long> {
+    List<ScheduleEntry> findByUserIdAndScheduleMonthIdAndCafeId(Long userId, Long scheduleMonthId, Long cafeId);
 
-    List<ScheduleEntry> findByUserIdAndScheduleMonthId(Long userId, Long scheduleMonthId);
+    List<ScheduleEntry> findByScheduleMonthIdAndCafeId(Long scheduleMonthId, Long cafeId);
 
-    List<ScheduleEntry> findByScheduleMonthId(Long scheduleMonthId);
+    List<ScheduleEntry> findByUserIdAndCafeIdAndDate(Long userId, Long cafeId, java.time.LocalDate date);
 
     @Modifying
-    @Query("DELETE FROM ScheduleEntry e WHERE e.user.id = :userId AND e.scheduleMonth.id = :monthId")
-    void deleteByUserIdAndScheduleMonthId(@Param("userId") Long userId, @Param("monthId") Long monthId);
+    @Query("DELETE FROM ScheduleEntry e WHERE e.user.id = :userId AND e.scheduleMonth.id = :monthId AND e.cafe.id = :cafeId")
+    void deleteByUserIdAndScheduleMonthIdAndCafeId(@Param("userId") Long userId, @Param("monthId") Long monthId, @Param("cafeId") Long cafeId);
 
-    void deleteAllByScheduleMonthId(Long monthId);
+    @Modifying
+    @Query("DELETE FROM ScheduleEntry e WHERE e.scheduleMonth.id = :monthId AND e.cafe.id = :cafeId")
+    void deleteAllByScheduleMonthIdAndCafeId(@Param("monthId") Long monthId, @Param("cafeId") Long cafeId);
 }

@@ -6,6 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 
 public interface ScheduleMonthRepository extends JpaRepository<ScheduleMonth, Long> {
-    Optional<ScheduleMonth> findByYearAndMonth(int year, int month);
-
+    Optional<ScheduleMonth> findByYearAndMonthAndCafeId(int year, int month, Long cafeId);
 }

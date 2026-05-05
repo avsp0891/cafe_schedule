@@ -7,19 +7,16 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 
-@Getter
-@Setter
-@AllArgsConstructor
-@NoArgsConstructor
 @Entity
 @Table(name = "schedule_entries",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"user_id", "entry_date"}),
-                @UniqueConstraint(columnNames = {"schedule_month_id", "user_id", "entry_date"})
-        })
+        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "cafe_id", "schedule_month_id", "date", "start_time"}))
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class ScheduleEntry {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -28,8 +25,18 @@ public class ScheduleEntry {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "entry_date", nullable = false)
-    private LocalDate entryDate;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cafe_id", nullable = false)
+    private Cafe cafe;
+
+    @Column(name = "date", nullable = false)
+    private LocalDate date;
+
+    @Column(name = "start_time", nullable = false)
+    private LocalTime startTime;
+
+    @Column(name = "end_time", nullable = false)
+    private LocalTime endTime;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -39,18 +46,7 @@ public class ScheduleEntry {
     @JoinColumn(name = "schedule_month_id", nullable = false)
     private ScheduleMonth scheduleMonth;
 
-
-    public ScheduleEntry(User user, LocalDate entryDate, Status status) {
-        this.user = user;
-        this.entryDate = entryDate;
-        this.status = status;
-    }
-
     public enum Status {
-        WORKING,
-        OFF,
-        VACATION,
-        SICK_LEAVE
+        WORKING, OFF, VACATION, SICK_LEAVE
     }
-
 }
