@@ -6,7 +6,7 @@ services:
     image: cafe
     container_name: main_container
     ports:
-      - "9090:9090"
+      - "9090:8080"
     depends_on:
       - db
     environment:

@@ -21,35 +21,24 @@ import java.util.stream.Collectors;
 
 @Service
 public class UserService {
-
     @Autowired
     private UserRepository userRepository;
-
     @Autowired
     private RoleRepository roleRepository;
-
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    // === CREATE: оставляем валидацию через DTO (фронт должен прислать все поля) ===
     @Transactional
     public User createUser(UserDto dto) {
-        if (dto.getUsername() == null || dto.getUsername().isBlank()) {
+        if (dto.getUsername() == null || dto.getUsername().isBlank())
             throw new RuntimeException("Username is required");
-        }
-        if (dto.getEmail() == null || dto.getEmail().isBlank()) {
-            throw new RuntimeException("Email is required");
-        }
-        if (dto.getPassword() == null || dto.getPassword().isBlank()) {
+        if (dto.getEmail() == null || dto.getEmail().isBlank()) throw new RuntimeException("Email is required");
+        if (dto.getPassword() == null || dto.getPassword().isBlank())
             throw new RuntimeException("Password is required");
-        }
 
-        if (userRepository.existsByUsername(dto.getUsername())) {
+        if (userRepository.existsByUsername(dto.getUsername()))
             throw new RuntimeException("Username is already taken!");
-        }
-        if (userRepository.existsByEmail(dto.getEmail())) {
-            throw new RuntimeException("Email is already in use!");
-        }
+        if (userRepository.existsByEmail(dto.getEmail())) throw new RuntimeException("Email is already in use!");
 
         User user = new User();
         user.setUsername(dto.getUsername());
@@ -61,60 +50,37 @@ public class UserService {
 
         Set<Role> roles = new HashSet<>();
         if (dto.getRoles() == null || dto.getRoles().isEmpty()) {
-            roles.add(roleRepository.findByName(Role.ERole.STAFF)
-                    .orElseThrow(() -> new RuntimeException("Default role not found")));
+            roles.add(roleRepository.findByName(Role.ERole.STAFF).orElseThrow(() -> new RuntimeException("Default role not found")));
         } else {
             for (String roleName : dto.getRoles()) {
                 Role.ERole role = Role.ERole.valueOf(roleName);
-                roles.add(roleRepository.findByName(role)
-                        .orElseThrow(() -> new RuntimeException("Role not found: " + roleName)));
+                roles.add(roleRepository.findByName(role).orElseThrow(() -> new RuntimeException("Role not found: " + roleName)));
             }
         }
         user.setRoles(roles);
         return userRepository.save(user);
     }
 
-    // === UPDATE: частичное обновление ===
     @Transactional
     public User updateUser(Long id, UserDto dto) {
-        if (!isAdmin()) {
-            throw new InsufficientPermissionsException("Only USER_ADMIN can manage users");
-        }
+        if (!isAdmin()) throw new InsufficientPermissionsException("Only USER_ADMIN can manage users");
+        User user = userRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
 
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
-
-        // Обновляем ТОЛЬКО ненулевые поля
         if (dto.getUsername() != null && !dto.getUsername().isBlank()) {
-            if (!dto.getUsername().equals(user.getUsername()) && userRepository.existsByUsername(dto.getUsername())) {
+            if (!dto.getUsername().equals(user.getUsername()) && userRepository.existsByUsername(dto.getUsername()))
                 throw new RuntimeException("Username already taken");
-            }
             user.setUsername(dto.getUsername());
         }
-
         if (dto.getEmail() != null && !dto.getEmail().isBlank()) {
-            if (!dto.getEmail().equals(user.getEmail()) && userRepository.existsByEmail(dto.getEmail())) {
+            if (!dto.getEmail().equals(user.getEmail()) && userRepository.existsByEmail(dto.getEmail()))
                 throw new RuntimeException("Email already in use");
-            }
             user.setEmail(dto.getEmail());
         }
-
-        if (dto.getPassword() != null && !dto.getPassword().isBlank()) {
+        if (dto.getPassword() != null && !dto.getPassword().isBlank())
             user.setPassword(passwordEncoder.encode(dto.getPassword()));
-        }
-
-        if (dto.getFirstName() != null) {
-            user.setFirstName(dto.getFirstName());
-        }
-
-        if (dto.getLastName() != null) {
-            user.setLastName(dto.getLastName());
-        }
-
-        if (dto.getPosition() != null) {
-            user.setPosition(dto.getPosition());
-        }
-
+        if (dto.getFirstName() != null) user.setFirstName(dto.getFirstName());
+        if (dto.getLastName() != null) user.setLastName(dto.getLastName());
+        if (dto.getPosition() != null) user.setPosition(dto.getPosition());
         if (dto.getRoles() != null && !dto.getRoles().isEmpty()) {
             Set<Role> roles = dto.getRoles().stream()
                     .map(roleName -> roleRepository.findByName(Role.ERole.valueOf(roleName))
@@ -122,14 +88,12 @@ public class UserService {
                     .collect(Collectors.toSet());
             user.setRoles(roles);
         }
-
         return userRepository.save(user);
     }
 
     @Transactional
     public User deleteUser(Long id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+        User user = userRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
         userRepository.deleteById(id);
         return user;
     }
@@ -141,8 +105,7 @@ public class UserService {
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String username = authentication.getName();
-        return userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+        return userRepository.findByUsername(username).orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
     }
 
     private boolean isAdmin() {

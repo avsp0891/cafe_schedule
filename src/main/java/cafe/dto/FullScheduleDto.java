@@ -1,33 +1,33 @@
 package cafe.dto;
 
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 
 import java.util.List;
 
 @Getter
 @Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class FullScheduleDto {
-    private List<UserSchedule> userSchedules;
+    @NotNull
+    private Long cafeId;
     private boolean approved;
-
-    public FullScheduleDto(List<UserSchedule> userSchedules, boolean approved) {
-        this.userSchedules = userSchedules;
-        this.approved = approved;
-    }
+    private List<UserSchedule> userSchedules;
 
     @Getter
     @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class UserSchedule {
         private Long userId;
         private String username;
         private String firstName;
         private String lastName;
         private String position;
-        private List<MyScheduleDto.ScheduleDay> days;
-
+        private List<MyScheduleDto.Shift> shifts;
     }
-
 }
