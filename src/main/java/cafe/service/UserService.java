@@ -6,6 +6,7 @@ import cafe.exception.ResourceNotFoundException;
 import cafe.model.Role;
 import cafe.model.User;
 import cafe.repository.RoleRepository;
+import cafe.repository.ScheduleEntryRepository;
 import cafe.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
@@ -25,6 +26,8 @@ public class UserService {
     private UserRepository userRepository;
     @Autowired
     private RoleRepository roleRepository;
+    @Autowired
+    private ScheduleEntryRepository scheduleEntryRepository;
     @Autowired
     private PasswordEncoder passwordEncoder;
 
@@ -94,6 +97,7 @@ public class UserService {
     @Transactional
     public User deleteUser(Long id) {
         User user = userRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+        scheduleEntryRepository.deleteByUserId(id);
         userRepository.deleteById(id);
         return user;
     }

@@ -17,4 +17,5 @@ public class Cafe {
     @Column(nullable = false, unique = true)
     private String name;
     private String address;
+    private String phone;
 }

@@ -22,4 +22,8 @@ public interface ScheduleEntryRepository extends JpaRepository<ScheduleEntry, Lo
     @Modifying
     @Query("DELETE FROM ScheduleEntry e WHERE e.scheduleMonth.id = :monthId AND e.cafe.id = :cafeId")
     void deleteAllByScheduleMonthIdAndCafeId(@Param("monthId") Long monthId, @Param("cafeId") Long cafeId);
+
+    @Modifying
+    @Query("DELETE FROM ScheduleEntry e WHERE e.user.id = :userId")
+    void deleteByUserId(@Param("userId") Long userId);
 }
