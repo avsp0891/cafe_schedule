@@ -20,6 +20,5 @@ public class UserDto {
     private String lastName;
     private String position;
     private Set<String> roles;
-
-
+    private Long cafeId;
 }

@@ -91,7 +91,7 @@ public class ScheduleController {
             @ApiResponse(responseCode = "404", description = "Кафе не найдено")
     })
     @GetMapping("/all")
-    @PreAuthorize("hasAuthority('CAFE_ADMIN') or hasAuthority('USER_ADMIN')")
+    @PreAuthorize("hasAuthority('CAFE_ADMIN') or hasAuthority('USER_ADMIN') or hasAuthority('STAFF')")
     public ResponseEntity<FullScheduleDto> getAllSchedule(
             @Parameter(description = "Месяц в формате YYYY-MM-DD", required = true, example = "2024-05-01", in = ParameterIn.QUERY)
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month,
