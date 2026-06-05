@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public interface ScheduleEntryRepository extends JpaRepository<ScheduleEntry, Long> {
@@ -13,7 +14,10 @@ public interface ScheduleEntryRepository extends JpaRepository<ScheduleEntry, Lo
 
     List<ScheduleEntry> findByScheduleMonthIdAndCafeId(Long scheduleMonthId, Long cafeId);
 
-    List<ScheduleEntry> findByUserIdAndCafeIdAndDate(Long userId, Long cafeId, java.time.LocalDate date);
+    List<ScheduleEntry> findByUserIdAndCafeIdAndDate(Long userId, Long cafeId, LocalDate date);
+
+    List<ScheduleEntry> findFirst1ByUserIdAndDateGreaterThanEqualAndStatusOrderByDateAscStartTimeAsc(
+            Long userId, LocalDate date, ScheduleEntry.Status status);
 
     @Modifying
     @Query("DELETE FROM ScheduleEntry e WHERE e.user.id = :userId AND e.scheduleMonth.id = :monthId AND e.cafe.id = :cafeId")

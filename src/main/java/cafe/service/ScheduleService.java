@@ -2,6 +2,7 @@ package cafe.service;
 
 import cafe.dto.FullScheduleDto;
 import cafe.dto.MyScheduleDto;
+import cafe.dto.NextShiftDto;
 import cafe.exception.InsufficientPermissionsException;
 import cafe.exception.ResourceNotFoundException;
 import cafe.model.Cafe;
@@ -14,7 +15,6 @@ import cafe.repository.ScheduleMonthRepository;
 import cafe.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -43,19 +44,6 @@ public class ScheduleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
     }
 
-    private boolean hasRole(String role) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return auth.getAuthorities().contains(new SimpleGrantedAuthority(role));
-    }
-
-    private boolean isCafeAdmin() {
-        return hasRole("CAFE_ADMIN");
-    }
-
-    private boolean isStaff() {
-        return hasRole("STAFF");
-    }
-
     private ScheduleMonth getOrCreateScheduleMonth(YearMonth yearMonth, Cafe cafe) {
         return scheduleMonthRepository.findByYearAndMonthAndCafeId(yearMonth.getYear(), yearMonth.getMonthValue(), cafe.getId())
                 .orElseGet(() -> scheduleMonthRepository.save(new ScheduleMonth(yearMonth, cafe)));
@@ -63,9 +51,6 @@ public class ScheduleService {
 
     @Transactional
     public FullScheduleDto saveMySchedule(LocalDate monthDate, MyScheduleDto dto) {
-        if (!isStaff() && !isCafeAdmin()) {
-            throw new InsufficientPermissionsException("Only staff or cafe admin can save personal schedule");
-        }
         User user = getCurrentUser();
         Cafe cafe = cafeRepository.findById(dto.getCafeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Cafe not found"));
@@ -81,12 +66,10 @@ public class ScheduleService {
             throw new IllegalStateException("Schedule is approved and locked");
         }
 
-        // Удаляем старые смены
+        validateNoDuplicateDates(dto.getShifts().stream().map(s -> s.getDate()).toList());
+
         scheduleEntryRepository.deleteByUserIdAndScheduleMonthIdAndCafeId(user.getId(), month.getId(), cafe.getId());
         scheduleEntryRepository.flush();
-
-        // Получаем существующие смены для проверки пересечений
-        List<ScheduleEntry> existingEntries = scheduleEntryRepository.findByUserIdAndScheduleMonthIdAndCafeId(user.getId(), month.getId(), cafe.getId());
 
         for (MyScheduleDto.Shift shift : dto.getShifts()) {
             if (!YearMonth.from(shift.getDate()).equals(yearMonth)) {
@@ -94,14 +77,6 @@ public class ScheduleService {
             }
             if (!shift.getStartTime().isBefore(shift.getEndTime())) {
                 throw new IllegalArgumentException("Start time must be before end time");
-            }
-            // Проверка пересечений
-            boolean hasOverlap = existingEntries.stream()
-                    .anyMatch(e -> e.getDate().equals(shift.getDate()) &&
-                            shift.getStartTime().isBefore(e.getEndTime()) &&
-                            shift.getEndTime().isAfter(e.getStartTime()));
-            if (hasOverlap) {
-                throw new IllegalArgumentException("Shift overlaps with existing entry on " + shift.getDate());
             }
 
             ScheduleEntry entry = new ScheduleEntry();
@@ -119,9 +94,6 @@ public class ScheduleService {
     }
 
     public FullScheduleDto getMySchedule(LocalDate monthDate, Long cafeId) {
-        if (!isStaff() && !isCafeAdmin()) {
-            throw new InsufficientPermissionsException("Access denied: you must be staff or cafe admin");
-        }
         User user = getCurrentUser();
         Cafe cafe = cafeRepository.findById(cafeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cafe not found"));
@@ -152,9 +124,6 @@ public class ScheduleService {
 
     @Transactional
     public FullScheduleDto saveAllSchedule(LocalDate monthDate, FullScheduleDto dto) {
-        if (!isCafeAdmin()) {
-            throw new InsufficientPermissionsException("Only cafe admin can save full schedule");
-        }
         YearMonth yearMonth = YearMonth.from(monthDate);
         Cafe cafe = cafeRepository.findById(dto.getCafeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Cafe not found"));
@@ -164,6 +133,10 @@ public class ScheduleService {
             throw new IllegalStateException("Schedule is approved and locked");
         }
 
+        for (FullScheduleDto.UserSchedule userSchedule : dto.getUserSchedules()) {
+            validateNoDuplicateDates(userSchedule.getShifts().stream().map(s -> s.getDate()).toList());
+        }
+
         scheduleEntryRepository.deleteAllByScheduleMonthIdAndCafeId(month.getId(), cafe.getId());
         scheduleEntryRepository.flush();
 
@@ -171,15 +144,7 @@ public class ScheduleService {
             User user = userRepository.findById(userSchedule.getUserId())
                     .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-            List<ScheduleEntry> existing = scheduleEntryRepository.findByUserIdAndScheduleMonthIdAndCafeId(user.getId(), month.getId(), cafe.getId());
-
             for (MyScheduleDto.Shift shift : userSchedule.getShifts()) {
-                boolean hasOverlap = existing.stream()
-                        .anyMatch(e -> e.getDate().equals(shift.getDate()) &&
-                                shift.getStartTime().isBefore(e.getEndTime()) &&
-                                shift.getEndTime().isAfter(e.getStartTime()));
-                if (hasOverlap) throw new IllegalArgumentException("Overlap detected for user " + user.getId());
-
                 ScheduleEntry entry = new ScheduleEntry();
                 entry.setUser(user);
                 entry.setCafe(cafe);
@@ -196,7 +161,6 @@ public class ScheduleService {
 
     @Transactional
     public FullScheduleDto approveSchedule(LocalDate monthDate, Long cafeId, boolean approved) {
-        if (!isCafeAdmin()) throw new InsufficientPermissionsException("Only cafe admin can approve");
         YearMonth yearMonth = YearMonth.from(monthDate);
         Cafe cafe = cafeRepository.findById(cafeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cafe not found"));
@@ -214,6 +178,34 @@ public class ScheduleService {
         return scheduleMonthRepository.findByYearAndMonthAndCafeId(yearMonth.getYear(), yearMonth.getMonthValue(), cafe.getId())
                 .map(ScheduleMonth::isApproved)
                 .orElse(false);
+    }
+
+    public NextShiftDto getMyNextShift() {
+        User user = getCurrentUser();
+        LocalDate today = LocalDate.now();
+        List<ScheduleEntry> entries = scheduleEntryRepository
+                .findFirst1ByUserIdAndDateGreaterThanEqualAndStatusOrderByDateAscStartTimeAsc(
+                        user.getId(), today, ScheduleEntry.Status.WORKING);
+        if (entries == null || entries.isEmpty()) {
+            return null;
+        }
+        ScheduleEntry e = entries.get(0);
+        return NextShiftDto.builder()
+                .date(e.getDate())
+                .startTime(e.getStartTime())
+                .endTime(e.getEndTime())
+                .cafeName(e.getCafe() != null ? e.getCafe().getName() : null)
+                .daysUntil((long) (e.getDate().toEpochDay() - today.toEpochDay()))
+                .build();
+    }
+
+    private void validateNoDuplicateDates(List<LocalDate> dates) {
+        Set<LocalDate> unique = new java.util.HashSet<>();
+        for (LocalDate d : dates) {
+            if (!unique.add(d)) {
+                throw new IllegalArgumentException("Duplicate shift date: " + d);
+            }
+        }
     }
 
     private FullScheduleDto.UserSchedule buildUserSchedule(User user, List<ScheduleEntry> entries) {
