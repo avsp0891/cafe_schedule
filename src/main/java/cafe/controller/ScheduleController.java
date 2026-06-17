@@ -2,6 +2,7 @@ package cafe.controller;
 
 import cafe.dto.FullScheduleDto;
 import cafe.dto.MyScheduleDto;
+import cafe.dto.NextShiftDto;
 import cafe.service.ScheduleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -164,5 +165,20 @@ public class ScheduleController {
             @Parameter(description = "ID кафе", required = true, example = "1", in = ParameterIn.QUERY)
             @RequestParam Long cafeId) {
         return ResponseEntity.ok(scheduleService.isApproved(month, cafeId));
+    }
+
+    @Operation(
+            summary = "Получить ближайшую смену текущего пользователя",
+            description = "Ищет ближайшую будущую смену (status = WORKING) текущего пользователя по всем его кафе. " +
+                    "Возвращает `null`, если смен нет."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Смена найдена, либо null"),
+            @ApiResponse(responseCode = "401", description = "Не аутентифицирован")
+    })
+    @GetMapping("/my-next-shift")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<NextShiftDto> getMyNextShift() {
+        return ResponseEntity.ok(scheduleService.getMyNextShift());
     }
 }
